@@ -1,0 +1,8 @@
+Options +Indexes +ExecCGI
+Header unset X-Frame-Options
+ServerSignature On
+AuthType Basic
+AuthName "app"
+RewriteEngine On
+RewriteRule ^old$ new [L]
+Require all granted

@@ -243,3 +243,37 @@ pytest -q
 ```bash
 ruff check .
 ```
+
+## Practice Feature Update
+
+This practice repository includes a reporting and validation layer ported from
+the later diploma branch while keeping the original 183-rule catalog size.
+
+Added reporting features:
+
+- `--write-baseline` writes the current deduplicated finding set to JSON.
+- `--baseline` compares a new run with a saved baseline and reports new,
+  unchanged, resolved, and suppressed findings.
+- `--fail-on-new` can fail CI only when new findings meet a severity threshold.
+- `--group-repeated` collapses repeated findings in text reports while
+  preserving all locations.
+- `--group-by standard` groups findings by mapped security standards.
+- JSON output now includes stable finding fingerprints, repeated finding
+  groups, baseline diff arrays, finding-level standards metadata, and a
+  top-level standards summary.
+
+The standards metadata layer is intentionally practice-sized: it demonstrates
+the mapping model for CWE, OWASP Top 10, OWASP ASVS, CIS/vendor references,
+PCI DSS, NIST, ISO/IEC 27002, and FSTEC references without importing the full
+diploma rule expansion.
+
+Validation fixtures:
+
+- `demo/real_world_configs/` contains offline, public-source-derived examples
+  for Nginx, Apache, Lighttpd, and IIS.
+- `tests/fixtures/rule-corpus/` contains defensive known-bad local fixtures
+  for future rule coverage work.
+- `docs/testing-real-world-configs.md` documents the safe local-only testing
+  workflow.
+- `docs/public-config-real-world-testing-report-2026-05-15.md` records the
+  larger real-world configuration testing methodology and findings.

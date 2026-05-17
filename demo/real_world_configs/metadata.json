@@ -1,0 +1,227 @@
+{
+  "description": "Defensive academic validation dataset of public-source-derived web server configuration fixtures.",
+  "samples": [
+    {
+      "id": "nginx-docker-default",
+      "source_name": "nginx Docker default configuration layout",
+      "source_url": "https://github.com/nginx/docker-nginx",
+      "server_type": "nginx",
+      "license": "BSD-2-Clause in the source repository; this fixture is a minimized derived example.",
+      "origin": "derived",
+      "entrypoint": "nginx/docker-default/nginx.conf",
+      "why_useful": "Exercises the common Docker-style nginx.conf plus conf.d default server shape.",
+      "features": [
+        "includes",
+        "default server",
+        "static root",
+        "access logging",
+        "error logging",
+        "location path"
+      ],
+      "expected_rule_ids": []
+    },
+    {
+      "id": "nginx-docs-reverse-proxy",
+      "source_name": "NGINX reverse proxy documentation examples",
+      "source_url": "https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/",
+      "server_type": "nginx",
+      "license": "Documentation example used as structure only; this fixture is a minimized derived example.",
+      "origin": "derived",
+      "entrypoint": "nginx/docs-reverse-proxy/nginx.conf",
+      "why_useful": "Covers a proxy deployment with upstreams, proxy headers, and an admin path.",
+      "features": [
+        "upstream",
+        "proxy_pass",
+        "proxy headers",
+        "request limits",
+        "location path",
+        "logging"
+      ],
+      "expected_rule_ids": []
+    },
+    {
+      "id": "nginx-docs-tls-server",
+      "source_name": "NGINX HTTPS server documentation examples",
+      "source_url": "https://nginx.org/en/docs/http/configuring_https_servers.html",
+      "server_type": "nginx",
+      "license": "Documentation example used as structure only; this fixture is a minimized derived example.",
+      "origin": "derived",
+      "entrypoint": "nginx/docs-tls-server/nginx.conf",
+      "why_useful": "Exercises TLS listener analysis with inherited http-scope TLS directives.",
+      "features": [
+        "TLS",
+        "HTTP/2",
+        "HSTS",
+        "inherited directives",
+        "cert placeholders",
+        "logging"
+      ],
+      "expected_rule_ids": []
+    },
+    {
+      "id": "apache-docker-httpd-default",
+      "source_name": "Docker Library httpd default configuration",
+      "source_url": "https://github.com/docker-library/httpd",
+      "server_type": "apache",
+      "license": "Apache License 2.0 in the source repository; this fixture is a minimized derived example.",
+      "origin": "derived",
+      "entrypoint": "apache/docker-httpd-default/httpd.conf",
+      "why_useful": "Exercises a compact version of the common containerized httpd baseline.",
+      "features": [
+        "DocumentRoot",
+        "Directory",
+        "Options",
+        "server tokens",
+        "server signature",
+        "logging"
+      ],
+      "expected_rule_ids": [
+        "apache.options_indexes",
+        "apache.server_signature_not_off",
+        "apache.server_tokens_not_prod"
+      ]
+    },
+    {
+      "id": "apache-docs-vhost-htaccess",
+      "source_name": "Apache HTTP Server virtual host and .htaccess documentation",
+      "source_url": "https://httpd.apache.org/docs/2.4/vhosts/examples.html",
+      "server_type": "apache",
+      "license": "Apache License 2.0 for Apache HTTP Server documentation; this fixture is a minimized derived example.",
+      "origin": "derived",
+      "entrypoint": "apache/docs-vhost-htaccess/httpd.conf",
+      "why_useful": "Exercises Include handling, vhost-scoped directives, and discovered .htaccess overrides.",
+      "features": [
+        "includes",
+        "VirtualHost",
+        "AllowOverride",
+        ".htaccess",
+        "rewrite",
+        "headers"
+      ],
+      "expected_rule_ids": [
+        "apache.allowoverride_all_in_directory"
+      ]
+    },
+    {
+      "id": "apache-docs-tls-vhost",
+      "source_name": "Apache HTTP Server SSL/TLS virtual host documentation",
+      "source_url": "https://httpd.apache.org/docs/2.4/ssl/ssl_howto.html",
+      "server_type": "apache",
+      "license": "Apache License 2.0 for Apache HTTP Server documentation; this fixture is a minimized derived example.",
+      "origin": "derived",
+      "entrypoint": "apache/docs-tls-vhost/httpd.conf",
+      "why_useful": "Exercises TLS virtual host policy without requiring certificate files to exist.",
+      "features": [
+        "TLS",
+        "VirtualHost",
+        "SSLProtocol",
+        "SSLCipherSuite",
+        "HSTS",
+        "Directory"
+      ],
+      "expected_rule_ids": []
+    },
+    {
+      "id": "lighttpd-docs-default",
+      "source_name": "Official lighttpd sample configuration",
+      "source_url": "https://github.com/lighttpd/lighttpd1.4/tree/master/doc/config",
+      "server_type": "lighttpd",
+      "license": "BSD-3-Clause in the source repository; this fixture is a minimized derived example.",
+      "origin": "derived",
+      "entrypoint": "lighttpd/docs-default/lighttpd.conf",
+      "why_useful": "Exercises lighttpd variables, include globbing, access logging, and directory listing.",
+      "features": [
+        "variables",
+        "includes",
+        "access logging",
+        "directory listing",
+        "module list"
+      ],
+      "expected_rule_ids": [
+        "lighttpd.dir_listing_enabled"
+      ]
+    },
+    {
+      "id": "lighttpd-docs-fastcgi-tls",
+      "source_name": "Official lighttpd module configuration documentation",
+      "source_url": "https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_ConfigurationOptions",
+      "server_type": "lighttpd",
+      "license": "Official documentation used as structure only; this fixture is a minimized derived example.",
+      "origin": "derived",
+      "entrypoint": "lighttpd/docs-fastcgi-tls/lighttpd.conf",
+      "why_useful": "Exercises FastCGI, TLS socket settings, and host-conditional status configuration.",
+      "features": [
+        "FastCGI",
+        "TLS",
+        "status endpoint",
+        "host conditional",
+        "access logging"
+      ],
+      "analyzer_options": {
+        "host": "status.example.test"
+      },
+      "expected_rule_ids": []
+    },
+    {
+      "id": "iis-microsoft-request-filtering",
+      "source_name": "Microsoft Learn IIS requestFiltering documentation",
+      "source_url": "https://learn.microsoft.com/en-us/iis/configuration/system.webServer/security/requestFiltering/",
+      "server_type": "iis",
+      "license": "Microsoft Learn documentation used as structure only; this fixture is a minimized derived example.",
+      "origin": "derived",
+      "entrypoint": "iis/microsoft-request-filtering/web.config",
+      "why_useful": "Exercises request filtering and IIS custom header handling in a standalone web.config.",
+      "features": [
+        "request filtering",
+        "request limits",
+        "verbs",
+        "custom headers",
+        "SSL flags"
+      ],
+      "expected_rule_ids": []
+    },
+    {
+      "id": "iis-microsoft-aspnet-debug",
+      "source_name": "Microsoft Learn ASP.NET debug and error-handling documentation",
+      "source_url": "https://learn.microsoft.com/en-us/troubleshoot/developer/webapps/aspnet/development/disable-debugging-application",
+      "server_type": "iis",
+      "license": "Microsoft Learn documentation used as structure only; this fixture is a minimized derived example.",
+      "origin": "derived",
+      "entrypoint": "iis/microsoft-aspnet-debug/web.config",
+      "why_useful": "Exercises common development web.config settings that should not drift into production.",
+      "features": [
+        "debug",
+        "custom errors",
+        "trace",
+        "directory browsing",
+        "SSL access flags",
+        "forms auth"
+      ],
+      "expected_rule_ids": [
+        "iis.compilation_debug_enabled",
+        "iis.custom_errors_off",
+        "iis.directory_browse_enabled",
+        "iis.ssl_not_required",
+        "iis.trace_enabled"
+      ]
+    },
+    {
+      "id": "iis-microsoft-applicationhost",
+      "source_name": "Microsoft Learn IIS ApplicationHost sites documentation",
+      "source_url": "https://learn.microsoft.com/en-us/iis/configuration/system.applicationhost/sites/",
+      "server_type": "iis",
+      "license": "Microsoft Learn documentation used as structure only; this fixture is a minimized derived example.",
+      "origin": "derived",
+      "entrypoint": "iis/microsoft-applicationhost/applicationHost.config",
+      "why_useful": "Exercises applicationHost.config parsing, site bindings, and app-pool metadata.",
+      "features": [
+        "applicationHost.config",
+        "sites",
+        "bindings",
+        "application pools",
+        "directory browsing"
+      ],
+      "expected_rule_ids": []
+    }
+  ]
+}

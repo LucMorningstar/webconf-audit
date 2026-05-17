@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-
 from pydantic import BaseModel, Field
+from typing import Literal
+from typing_extensions import TypedDict
 
+from webconf_audit.fingerprints import finding_fingerprint
 from webconf_audit.models import (
     AnalysisIssue,
     AnalysisResult,
@@ -18,6 +20,8 @@ from webconf_audit.models import (
     SourceLocation,
     Severity,
 )
+from webconf_audit.rule_registry import StandardReference, registry
+from webconf_audit.suppressions import suppressed_findings as suppressed_finding_entries
 
 # Severity ordering: most critical first.
 _SEVERITY_ORDER: dict[str, int] = {
@@ -31,9 +35,42 @@ _SEVERITY_ORDER: dict[str, int] = {
 _ISSUE_LEVEL_ORDER: dict[str, int] = {
     "error": 0,
     "warning": 1,
+    "info": 2,
 }
 
 _ALL_SEVERITIES: list[Severity] = ["critical", "high", "medium", "low", "info"]
+_STANDARD_ORDER = [
+    "CWE",
+    "OWASP Top 10",
+    "OWASP ASVS",
+    "CIS",
+    "Vendor",
+    "OWASP Cheat Sheet Series",
+    "NIST SP 800-44 Rev. 2",
+    "NIST SP 800-52 Rev. 2",
+    "NIST SP 800-53 Rev. 5",
+    "NIST SP 800-63B",
+    "PCI DSS v4.0.1",
+    "ISO/IEC 27002:2022",
+    'ФСТЭК "Меры защиты информации в ГИС"',
+    "Unmapped",
+]
+_SECONDARY_STANDARD_ORDER = [
+    "MITRE ATT&CK Enterprise v15",
+    "ФСТЭК БДУ",
+]
+
+ReportGroupBy = Literal["severity", "standard"]
+
+
+class BaselineDiff(TypedDict, total=False):
+    """Diff groups produced by comparing a report with a baseline."""
+
+    baseline_path: str
+    new_findings: list[dict[str, object]]
+    unchanged_findings: list[dict[str, object]]
+    resolved_findings: list[dict[str, object]]
+    suppressed_findings: list[dict[str, object]]
 
 # ---------------------------------------------------------------------------
 # Deduplication: universal vs server-specific rule mapping
@@ -203,6 +240,7 @@ class ReportSummary(BaseModel):
 
     total_findings: int = 0
     total_issues: int = 0
+    suppressed_findings: int = 0
     suppressed_duplicates: int = 0
     by_severity: dict[str, int] = Field(default_factory=lambda: {s: 0 for s in _ALL_SEVERITIES})
     by_mode: dict[str, int] = Field(default_factory=dict)
@@ -217,6 +255,7 @@ class ReportData(BaseModel):
     generated_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat(),
     )
+    baseline_diff: BaselineDiff | None = None
 
     @property
     def all_findings_raw(self) -> list[Finding]:
@@ -269,6 +308,10 @@ class ReportData(BaseModel):
                 )
 
         total_issues = sum(len(result.issues) for result in self.results)
+        suppressed_total = sum(
+            len(suppressed_finding_entries(result))
+            for result in self.results
+        )
 
         return ReportSummary(
             total_findings=sum(
@@ -276,6 +319,7 @@ class ReportData(BaseModel):
                 for _, deduplicated in deduplicated_results
             ),
             total_issues=total_issues,
+            suppressed_findings=suppressed_total,
             suppressed_duplicates=suppressed,
             by_severity=by_severity,
             by_mode=by_mode,
@@ -312,19 +356,43 @@ def format_location(location: SourceLocation | None) -> str | None:
 class TextFormatter:
     """Render ReportData as human-readable terminal output."""
 
+    def __init__(
+        self,
+        *,
+        group_by: ReportGroupBy = "severity",
+        group_repeated: bool = False,
+        group_by_cause: bool = False,
+    ) -> None:
+        self.group_by = group_by
+        self.group_repeated = group_repeated
+        self.group_by_cause = group_by_cause
+
     def format(self, report: ReportData) -> str:
         summary = report.summary()
         deduplicated_results, _ = _deduplicated_findings_by_result(report.results)
         lines = _report_header_lines(report, summary)
         multi = len(report.results) > 1
+        lines.extend(_baseline_diff_section_lines(report.baseline_diff))
 
         for result, result_findings in deduplicated_results:
-            lines.extend(_result_section_lines(result, result_findings, multi=multi))
+            lines.extend(
+                _result_section_lines(
+                    result,
+                    result_findings,
+                    multi=multi,
+                    group_by=self.group_by,
+                    group_repeated=self.group_repeated,
+                    group_by_cause=self.group_by_cause,
+                )
+            )
 
-        lines.append(
+        total_line = (
             f"Total: {summary.total_findings} findings,"
             f" {summary.total_issues} issues"
         )
+        if summary.suppressed_findings:
+            total_line += f", {summary.suppressed_findings} suppressed"
+        lines.append(total_line)
         return "\n".join(lines)
 
 
@@ -364,6 +432,8 @@ def _report_summary_lines(
         ),
         f"  Analysis issues: {summary.total_issues}",
     ]
+    if summary.suppressed_findings > 0:
+        lines.append(f"  Suppressed findings: {summary.suppressed_findings}")
     if summary.suppressed_duplicates > 0:
         lines.append(
             f"  ({summary.suppressed_duplicates} universal finding(s)"
@@ -373,17 +443,78 @@ def _report_summary_lines(
     return lines
 
 
+def _baseline_diff_section_lines(baseline_diff: BaselineDiff | None) -> list[str]:
+    if baseline_diff is None:
+        return []
+
+    lines = [
+        "Baseline diff:",
+        (
+            "  "
+            f"new {len(_diff_entries(baseline_diff, 'new_findings'))}, "
+            f"unchanged {len(_diff_entries(baseline_diff, 'unchanged_findings'))}, "
+            f"resolved {len(_diff_entries(baseline_diff, 'resolved_findings'))}, "
+            f"suppressed {len(_diff_entries(baseline_diff, 'suppressed_findings'))}"
+        ),
+    ]
+    lines.extend(_diff_entry_lines("New findings", _diff_entries(baseline_diff, "new_findings")))
+    lines.extend(
+        _diff_entry_lines("Resolved findings", _diff_entries(baseline_diff, "resolved_findings"))
+    )
+    lines.append("")
+    return lines
+
+
+def _diff_entries(baseline_diff: BaselineDiff, key: str) -> list[dict[str, object]]:
+    entries = baseline_diff.get(key)
+    if not isinstance(entries, list):
+        return []
+    return [entry for entry in entries if isinstance(entry, dict)]
+
+
+def _diff_entry_lines(title: str, entries: list[dict[str, object]]) -> list[str]:
+    if not entries:
+        return []
+    lines = [f"  {title}:"]
+    for entry in entries:
+        rule_id = _summary_string(entry.get("rule_id"), default="unknown")
+        severity = _summary_string(entry.get("severity"), default="unknown")
+        entry_title = _summary_string(entry.get("title"), default="Untitled finding")
+        location = _summary_string(entry.get("location_display"))
+        if location is None and isinstance(entry.get("location"), str):
+            location = _summary_string(entry.get("location"))
+        target = _summary_string(entry.get("target"))
+        suffix = location or target
+        line = f"    - [{rule_id}] {entry_title} ({severity})"
+        if suffix:
+            line += f" at {suffix}"
+        lines.append(line)
+    return lines
+
+
 def _result_section_lines(
     result: AnalysisResult,
     result_findings: list[Finding],
     *,
     multi: bool,
+    group_by: ReportGroupBy = "severity",
+    group_repeated: bool = False,
+    group_by_cause: bool = False,
 ) -> list[str]:
     lines: list[str] = []
     if multi:
         lines.extend(_multi_target_header_lines(result))
     lines.extend(_external_section_lines(result))
-    lines.extend(_severity_section_lines(result_findings))
+    if group_by_cause:
+        lines.extend(_cause_section_lines(result_findings))
+    elif group_by == "standard":
+        lines.extend(
+            _standard_section_lines(result_findings, group_repeated=group_repeated)
+        )
+    else:
+        lines.extend(
+            _severity_section_lines(result_findings, group_repeated=group_repeated)
+        )
     lines.extend(_issue_section_lines(result.issues))
     lines.extend(_diagnostic_section_lines(result.diagnostics))
     return lines
@@ -401,14 +532,21 @@ def _external_section_lines(result: AnalysisResult) -> list[str]:
     return ["External Summary:", *[f"- {line}" for line in ext_lines], ""]
 
 
-def _severity_section_lines(result_findings: list[Finding]) -> list[str]:
+def _severity_section_lines(
+    result_findings: list[Finding],
+    *,
+    group_repeated: bool = False,
+) -> list[str]:
     lines: list[str] = []
     by_severity = _findings_by_severity(result_findings)
     for severity in _ALL_SEVERITIES:
         group = by_severity[severity]
         lines.append(f"=== {severity.upper()} ({len(group)}) ===")
-        for finding in group:
-            lines.extend(_finding_lines(finding))
+        if group_repeated:
+            lines.extend(_grouped_finding_lines(group))
+        else:
+            for finding in group:
+                lines.extend(_finding_lines(finding))
         lines.append("")
     return lines
 
@@ -422,11 +560,295 @@ def _findings_by_severity(
     return grouped
 
 
+def _cause_section_lines(result_findings: list[Finding]) -> list[str]:
+    lines: list[str] = []
+    cause_groups = _findings_by_cause(result_findings)
+    causal_group_count = len(cause_groups)
+    uncausal_findings = [
+        finding
+        for finding in result_findings
+        if finding.effective_cause_key is None
+    ]
+
+    lines.append(f"=== CAUSE GROUPS ({causal_group_count}) ===")
+    if not cause_groups:
+        lines.append("  none")
+    for cause_key, findings in cause_groups:
+        lines.append(f"  cause: {_cause_key_display(cause_key)}")
+        scopes = _cause_group_scopes(findings)
+        if scopes:
+            lines.append(
+                f"    affected scopes ({len(scopes)}): {', '.join(scopes)}"
+            )
+        lines.append(f"    findings ({len(findings)}):")
+        for finding in findings:
+            lines.extend(_indent_lines(_finding_lines(finding), "      "))
+    lines.append("")
+
+    lines.append(f"=== UNCAUSAL FINDINGS ({len(uncausal_findings)}) ===")
+    if not uncausal_findings:
+        lines.append("  none")
+    else:
+        for finding in uncausal_findings:
+            lines.extend(_finding_lines(finding))
+    lines.append("")
+    return lines
+
+
 def _finding_lines(finding: Finding) -> list[str]:
     lines = [f"  [{finding.rule_id}] {finding.title}"]
     location = format_location(finding.location)
     if location:
         lines.append(f"    location: {location}")
+    note = _finding_note(finding)
+    if note:
+        lines.append(f"    note: {note}")
+    lines.append(f"    description: {finding.description}")
+    lines.append(f"    recommendation: {finding.recommendation}")
+    return lines
+
+
+def _grouped_finding_lines(findings: list[Finding]) -> list[str]:
+    lines: list[str] = []
+    for group in _finding_groups(findings):
+        if len(group) == 1:
+            lines.extend(_finding_lines(group[0]))
+        else:
+            lines.extend(_repeated_finding_group_lines(group))
+    return lines
+
+
+def _repeated_finding_group_lines(findings: list[Finding]) -> list[str]:
+    first = findings[0]
+    lines = [
+        f"  [{first.rule_id}] {first.title}",
+        f"    findings: {len(findings)} repeated",
+    ]
+    cause = _finding_group_cause(first)
+    if cause:
+        lines.append(f"    note: {cause}")
+    locations = [_finding_location_display(finding) for finding in findings]
+    lines.append(f"    locations ({len(locations)}):")
+    lines.extend(f"      - {location}" for location in locations)
+    lines.append(f"    description: {first.description}")
+    lines.append(f"    recommendation: {first.recommendation}")
+    return lines
+
+
+def _finding_location_display(finding: Finding) -> str:
+    return format_location(finding.location) or "no location"
+
+
+def _findings_by_cause(
+    findings: list[Finding],
+) -> list[tuple[tuple[str, ...], list[Finding]]]:
+    grouped: dict[tuple[str, ...], list[Finding]] = {}
+    for finding in findings:
+        cause_key = finding.effective_cause_key
+        if cause_key is None:
+            continue
+        grouped.setdefault(cause_key, []).append(finding)
+    return list(grouped.items())
+
+
+def _cause_key_display(cause_key: tuple[str, ...]) -> str:
+    if len(cause_key) == 2 and cause_key[1].isdigit():
+        return f"{cause_key[0]}:{cause_key[1]}"
+    return " | ".join(cause_key)
+
+
+def _cause_group_scopes(findings: list[Finding]) -> list[str]:
+    scopes: list[str] = []
+    seen: set[str] = set()
+    for finding in findings:
+        for scope in _finding_affected_scopes(finding):
+            if scope in seen:
+                continue
+            seen.add(scope)
+            scopes.append(scope)
+    return scopes
+
+
+def _finding_affected_scopes(finding: Finding) -> list[str]:
+    raw_affected_scopes = finding.metadata.get("affected_scopes")
+    if isinstance(raw_affected_scopes, list):
+        scopes = [
+            scope
+            for scope in raw_affected_scopes
+            if isinstance(scope, str) and scope
+        ]
+        if scopes:
+            return scopes
+    scope_name = finding.metadata.get("scope_name")
+    if isinstance(scope_name, str) and scope_name:
+        return [scope_name]
+    return []
+
+
+def _indent_lines(lines: list[str], prefix: str) -> list[str]:
+    return [f"{prefix}{line}" for line in lines]
+
+
+def _finding_groups(findings: list[Finding]) -> list[list[Finding]]:
+    grouped: dict[tuple[str, str, str, str, str, str], list[Finding]] = {}
+    for finding in findings:
+        grouped.setdefault(_finding_group_key(finding), []).append(finding)
+    return list(grouped.values())
+
+
+def _finding_group_key(finding: Finding) -> tuple[str, str, str, str, str, str]:
+    cause = _finding_group_cause(finding) or ""
+    return (
+        finding.rule_id,
+        finding.severity,
+        finding.title,
+        finding.description,
+        finding.recommendation,
+        cause,
+    )
+
+
+def _finding_group_key_label(key: tuple[str, str, str, str, str, str]) -> str:
+    return json.dumps(key, separators=(",", ":"), ensure_ascii=False)
+
+
+def _finding_group_cause(finding: Finding) -> str | None:
+    for key in ("report_group", "noise_group", "effective_cause", "note"):
+        value = finding.metadata.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _finding_note(finding: Finding) -> str | None:
+    note = finding.metadata.get("note")
+    if isinstance(note, str) and note:
+        return note
+    return None
+
+
+def _standard_section_lines(
+    result_findings: list[Finding],
+    *,
+    group_repeated: bool = False,
+) -> list[str]:
+    lines: list[str] = []
+    primary_groups = _findings_by_standard(result_findings, secondary=False)
+    for standard in _ordered_standard_names(primary_groups):
+        entries = primary_groups[standard]
+        lines.append(f"=== STANDARD {standard.upper()} ({len(entries)}) ===")
+        if group_repeated:
+            lines.extend(_grouped_standard_finding_lines(entries))
+        else:
+            for finding, refs in entries:
+                lines.extend(_standard_finding_lines(finding, refs))
+        lines.append("")
+    secondary_groups = _findings_by_standard(result_findings, secondary=True)
+    if secondary_groups:
+        total = sum(len(entries) for entries in secondary_groups.values())
+        lines.append(f"=== SECONDARY TAGS ({total}) ===")
+        for standard in _ordered_standard_names(secondary_groups, secondary=True):
+            entries = secondary_groups[standard]
+            lines.append(f"--- {standard} ({len(entries)}) ---")
+            if group_repeated:
+                lines.extend(_grouped_standard_finding_lines(entries))
+            else:
+                for finding, refs in entries:
+                    lines.extend(_standard_finding_lines(finding, refs))
+        lines.append("")
+    return lines
+
+
+def _findings_by_standard(
+    result_findings: list[Finding],
+    *,
+    secondary: bool,
+) -> dict[str, list[tuple[Finding, tuple[StandardReference, ...]]]]:
+    groups: dict[str, list[tuple[Finding, tuple[StandardReference, ...]]]] = {}
+    for finding in result_findings:
+        refs = _standards_for_rule(finding.rule_id, secondary=secondary)
+        if not refs:
+            if not secondary:
+                groups.setdefault("Unmapped", []).append((finding, ()))
+            continue
+        refs_by_standard: dict[str, list[StandardReference]] = {}
+        for ref in refs:
+            refs_by_standard.setdefault(ref.standard, []).append(ref)
+        for standard, standard_refs in refs_by_standard.items():
+            groups.setdefault(standard, []).append((finding, tuple(standard_refs)))
+    return groups
+
+
+def _ordered_standard_names(
+    groups: dict[str, list[tuple[Finding, tuple[StandardReference, ...]]]],
+    *,
+    secondary: bool = False,
+) -> list[str]:
+    order = _SECONDARY_STANDARD_ORDER if secondary else _STANDARD_ORDER
+    known = [name for name in order if name in groups]
+    extra = sorted(name for name in groups if name not in order)
+    return known + extra
+
+
+def _grouped_standard_finding_lines(
+    entries: list[tuple[Finding, tuple[StandardReference, ...]]],
+) -> list[str]:
+    lines: list[str] = []
+    for group in _standard_finding_groups(entries):
+        if len(group) == 1:
+            finding, refs = group[0]
+            lines.extend(_standard_finding_lines(finding, refs))
+        else:
+            lines.extend(_standard_repeated_finding_group_lines(group))
+    return lines
+
+
+def _standard_finding_groups(
+    entries: list[tuple[Finding, tuple[StandardReference, ...]]],
+) -> list[list[tuple[Finding, tuple[StandardReference, ...]]]]:
+    grouped: dict[
+        tuple[str, str, str, str, str, str],
+        list[tuple[Finding, tuple[StandardReference, ...]]],
+    ] = {}
+    for finding, refs in entries:
+        grouped.setdefault(_finding_group_key(finding), []).append((finding, refs))
+    return list(grouped.values())
+
+
+def _standard_repeated_finding_group_lines(
+    entries: list[tuple[Finding, tuple[StandardReference, ...]]],
+) -> list[str]:
+    first, refs = entries[0]
+    lines = [
+        f"  [{first.rule_id}] {first.title} ({first.severity})",
+    ]
+    if refs:
+        lines.append(f"    refs: {', '.join(_standard_ref_label(ref) for ref in refs)}")
+    lines.append(f"    findings: {len(entries)} repeated")
+    cause = _finding_group_cause(first)
+    if cause:
+        lines.append(f"    note: {cause}")
+    locations = [_finding_location_display(finding) for finding, _refs in entries]
+    lines.append(f"    locations ({len(locations)}):")
+    lines.extend(f"      - {location}" for location in locations)
+    lines.append(f"    description: {first.description}")
+    lines.append(f"    recommendation: {first.recommendation}")
+    return lines
+
+
+def _standard_finding_lines(
+    finding: Finding,
+    refs: tuple[StandardReference, ...],
+) -> list[str]:
+    lines = [f"  [{finding.rule_id}] {finding.title} ({finding.severity})"]
+    if refs:
+        lines.append(f"    refs: {', '.join(_standard_ref_label(ref) for ref in refs)}")
+    location = format_location(finding.location)
+    if location:
+        lines.append(f"    location: {location}")
+    note = _finding_note(finding)
+    if note:
+        lines.append(f"    note: {note}")
     lines.append(f"    description: {finding.description}")
     lines.append(f"    recommendation: {finding.recommendation}")
     return lines
@@ -463,16 +885,293 @@ def _diagnostic_section_lines(diagnostics: list[str]) -> list[str]:
 class JsonFormatter:
     """Render ReportData as structured JSON."""
 
+    def __init__(self, *, group_by_cause: bool = False) -> None:
+        self.group_by_cause = group_by_cause
+
     def format(self, report: ReportData) -> str:
         summary = report.summary()
+        top_level_findings = deduplicated_finding_pairs(report.results)
+        baseline_diff = report.baseline_diff or {}
+        suppressed_payloads = _suppressed_payloads_for_report(report, baseline_diff)
         payload = {
             "generated_at": report.generated_at,
             "summary": summary.model_dump(),
-            "results": [r.model_dump() for r in report.results],
-            "findings": [f.model_dump() for f in report.all_findings],
+            "results": [
+                _result_payload(result)
+                for result in report.results
+            ],
+            "findings": [
+                finding_payload(result, finding)
+                for result, finding in top_level_findings
+            ],
+            "finding_groups": _repeated_finding_group_payloads(top_level_findings),
+            "new_findings": _diff_entries(baseline_diff, "new_findings"),
+            "resolved_findings": _diff_entries(baseline_diff, "resolved_findings"),
+            "unchanged_findings": _diff_entries(baseline_diff, "unchanged_findings"),
+            "suppressed_findings": suppressed_payloads,
+            "standards": _standards_summary_payload(top_level_findings),
             "issues": [i.model_dump() for i in report.all_issues],
         }
+        if self.group_by_cause:
+            payload["cause_groups"] = _cause_group_payloads(top_level_findings)
         return json.dumps(payload, indent=2, ensure_ascii=False)
+
+
+def _suppressed_payloads_for_report(
+    report: ReportData,
+    baseline_diff: BaselineDiff,
+) -> list[dict[str, object]]:
+    raw_payloads = _suppressed_finding_payloads(report.results)
+    if report.baseline_diff is None:
+        return raw_payloads
+    diff_payloads = _diff_entries(baseline_diff, "suppressed_findings")
+    return diff_payloads or raw_payloads
+
+
+def deduplicated_finding_pairs(results: list[AnalysisResult]) -> list[tuple[AnalysisResult, Finding]]:
+    deduplicated_results, _ = _deduplicated_findings_by_result(results)
+    pairs = [
+        (result, finding)
+        for result, result_findings in deduplicated_results
+        for finding in result_findings
+    ]
+    pairs.sort(
+        key=lambda pair: (
+            _finding_sort_key(pair[1]),
+            finding_fingerprint(pair[0], pair[1]),
+        )
+    )
+    return pairs
+
+
+def _repeated_finding_group_payloads(
+    finding_pairs: list[tuple[AnalysisResult, Finding]],
+) -> list[dict[str, object]]:
+    grouped: dict[
+        tuple[str, str, str, str, str, str],
+        list[tuple[AnalysisResult, Finding]],
+    ] = {}
+    for result, finding in finding_pairs:
+        grouped.setdefault(_finding_group_key(finding), []).append((result, finding))
+
+    return [
+        _repeated_finding_group_payload(key, entries)
+        for key, entries in grouped.items()
+        if len(entries) > 1
+    ]
+
+
+def _repeated_finding_group_payload(
+    key: tuple[str, str, str, str, str, str],
+    entries: list[tuple[AnalysisResult, Finding]],
+) -> dict[str, object]:
+    _result, first = entries[0]
+    cause = key[-1] or None
+    return {
+        "group_key": _finding_group_key_label(key),
+        "rule_id": first.rule_id,
+        "title": first.title,
+        "severity": first.severity,
+        "description": first.description,
+        "recommendation": first.recommendation,
+        "count": len(entries),
+        "cause": cause,
+        "locations": [
+            _finding_group_location_payload(result, finding)
+            for result, finding in entries
+        ],
+    }
+
+
+def _finding_group_location_payload(
+    result: AnalysisResult,
+    finding: Finding,
+) -> dict[str, object]:
+    return {
+        "target": result.target,
+        "display": _finding_location_display(finding),
+        "location": finding.location.model_dump() if finding.location else None,
+        "fingerprint": finding_fingerprint(result, finding),
+    }
+
+
+def _cause_group_payloads(
+    finding_pairs: list[tuple[AnalysisResult, Finding]],
+) -> list[dict[str, object]]:
+    grouped: dict[
+        tuple[str, ...],
+        list[tuple[AnalysisResult, Finding]],
+    ] = {}
+    for result, finding in finding_pairs:
+        cause_key = finding.effective_cause_key
+        if cause_key is None:
+            continue
+        grouped.setdefault(cause_key, []).append((result, finding))
+
+    return [
+        {
+            "cause_key": list(cause_key),
+            "findings": [
+                {
+                    "target": result.target,
+                    **finding_payload(result, finding),
+                }
+                for result, finding in entries
+            ],
+        }
+        for cause_key, entries in grouped.items()
+    ]
+
+
+def _result_payload(result: AnalysisResult) -> dict[str, object]:
+    """Serialize a single analysis result with its raw, per-result findings.
+
+    ``payload["findings"]`` mirrors ``result.findings`` and is intentionally not
+    deduplicated, so it may include universal findings that are suppressed in
+    the aggregated top-level ``"findings"`` array (built via
+    ``deduplicated_finding_pairs``). Consumers that want a stable, dedup'd
+    view of findings should read the top-level array; the per-result list is
+    kept verbatim so callers retain the full detector output for each target.
+    """
+    payload = result.model_dump()
+    payload["findings"] = [
+        finding_payload(result, finding)
+        for finding in result.findings
+    ]
+    return payload
+
+
+def _suppressed_finding_payloads(results: list[AnalysisResult]) -> list[dict[str, object]]:
+    payloads: list[dict[str, object]] = []
+    for result in results:
+        payloads.extend(suppressed_finding_entries(result))
+    return payloads
+
+
+def finding_payload(result: AnalysisResult, finding: Finding) -> dict[str, object]:
+    payload = finding.model_dump()
+    payload["fingerprint"] = finding_fingerprint(result, finding)
+    payload["standards"] = _standard_ref_payloads(finding.rule_id)
+    payload["standards_secondary"] = _standard_ref_payloads(
+        finding.rule_id,
+        secondary=True,
+    )
+    return payload
+
+
+def _ensure_rule_metadata_loaded() -> None:
+    registry.ensure_loaded("webconf_audit.local.rules.universal")
+    registry.ensure_loaded("webconf_audit.local.nginx.rules")
+    registry.ensure_loaded("webconf_audit.local.apache.rules")
+    registry.ensure_loaded("webconf_audit.local.lighttpd.rules")
+    registry.ensure_loaded("webconf_audit.local.iis.rules")
+    registry.ensure_loaded("webconf_audit.external.rules")
+    from webconf_audit.external.rules._runner import register_external_rule_metas
+
+    register_external_rule_metas()
+
+
+def _standards_for_rule(
+    rule_id: str,
+    *,
+    secondary: bool = False,
+) -> tuple[StandardReference, ...]:
+    _ensure_rule_metadata_loaded()
+    meta = registry.get_meta(rule_id)
+    if meta is None:
+        return ()
+    return meta.standards_secondary if secondary else meta.standards
+
+
+def _standard_ref_payloads(
+    rule_id: str,
+    *,
+    secondary: bool = False,
+) -> list[dict[str, object]]:
+    return [
+        _standard_ref_payload(ref)
+        for ref in _standards_for_rule(rule_id, secondary=secondary)
+    ]
+
+
+def _standard_ref_payload(ref: StandardReference) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "standard": ref.standard,
+        "reference": ref.reference,
+        "coverage": ref.coverage,
+    }
+    if ref.url is not None:
+        payload["url"] = ref.url
+    if ref.note is not None:
+        payload["note"] = ref.note
+    if ref.tier != "primary":
+        payload["tier"] = ref.tier
+    return payload
+
+
+def _standards_summary_payload(
+    finding_pairs: list[tuple[AnalysisResult, Finding]],
+) -> list[dict[str, object]]:
+    buckets: dict[
+        tuple[str, str, str, str, str | None, str | None],
+        dict[str, object],
+    ] = {}
+    for _result, finding in finding_pairs:
+        for ref in (
+            *_standards_for_rule(finding.rule_id),
+            *_standards_for_rule(finding.rule_id, secondary=True),
+        ):
+            key = (
+                ref.tier,
+                ref.standard,
+                ref.reference,
+                ref.coverage,
+                ref.url,
+                ref.note,
+            )
+            bucket = buckets.setdefault(
+                key,
+                {
+                    **_standard_ref_payload(ref),
+                    "finding_count": 0,
+                    "rule_ids": set(),
+                },
+            )
+            bucket["finding_count"] = int(bucket["finding_count"]) + 1
+            rule_ids = bucket["rule_ids"]
+            if isinstance(rule_ids, set):
+                rule_ids.add(finding.rule_id)
+
+    payload: list[dict[str, object]] = []
+    for bucket in buckets.values():
+        rule_ids = bucket["rule_ids"]
+        if isinstance(rule_ids, set):
+            bucket["rule_ids"] = sorted(rule_ids)
+        payload.append(bucket)
+    payload.sort(key=_standard_summary_sort_key)
+    return payload
+
+
+def _standard_summary_sort_key(entry: dict[str, object]) -> tuple[int, int, str, str]:
+    tier_order = 1 if entry.get("tier") == "secondary" else 0
+    standard = str(entry.get("standard", ""))
+    reference = str(entry.get("reference", ""))
+    if entry.get("tier") == "secondary":
+        order = (
+            _SECONDARY_STANDARD_ORDER.index(standard)
+            if standard in _SECONDARY_STANDARD_ORDER
+            else 999
+        )
+    else:
+        order = _STANDARD_ORDER.index(standard) if standard in _STANDARD_ORDER else 999
+    return (tier_order, order, standard, reference)
+
+
+def _standard_ref_label(ref: StandardReference) -> str:
+    label = ref.reference
+    if ref.coverage != "direct":
+        label = f"{label} ({ref.coverage})"
+    return label
 
 
 # ---------------------------------------------------------------------------
@@ -737,10 +1436,14 @@ def _summary_string_list(value: object) -> list[str]:
 
 __all__ = [
     "JsonFormatter",
+    "BaselineDiff",
     "ReportData",
+    "ReportGroupBy",
     "ReportSummary",
     "TextFormatter",
     "UNIVERSAL_TO_SPECIFIC_MAP",
+    "deduplicated_finding_pairs",
     "deduplicate_findings",
+    "finding_payload",
     "format_location",
 ]

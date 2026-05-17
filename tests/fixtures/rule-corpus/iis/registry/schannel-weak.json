@@ -1,0 +1,23 @@
+{
+  "schannel": {
+    "protocols": {
+      "TLS 1.0": {
+        "server_enabled": 1,
+        "server_disabled_by_default": 0
+      },
+      "TLS 1.2": {
+        "server_enabled": 0,
+        "server_disabled_by_default": 1
+      }
+    },
+    "ciphers": {
+      "AES 128/128": {
+        "enabled": 4294967295
+      }
+    },
+    "cipher_suite_order": [
+      "TLS_RSA_WITH_3DES_EDE_CBC_SHA",
+      "TLS_AES_128_GCM_SHA256"
+    ]
+  }
+}

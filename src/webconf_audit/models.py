@@ -1,3 +1,11 @@
+"""Core result and reporting data models shared by local and external
+analysis pipelines.
+
+Defines :class:`Finding`, :class:`AnalysisIssue`, :class:`SourceLocation`,
+and :class:`AnalysisResult` plus the literal type aliases used across
+the analyzer surface (severity, mode, issue level, location kind).
+"""
+
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -6,7 +14,7 @@ from pydantic import BaseModel, Field
 
 AnalysisMode = Literal["local", "external"]
 Severity = Literal["info", "low", "medium", "high", "critical"]
-IssueLevel = Literal["warning", "error"]
+IssueLevel = Literal["info", "warning", "error"]
 ResultKind = Literal["finding", "analysis_issue"]
 LocationKind = Literal["file", "xml", "endpoint", "url", "header", "tls", "check"]
 
@@ -33,6 +41,7 @@ class Finding(_BaseResultEntry):
     severity: Severity
     description: str
     recommendation: str
+    effective_cause_key: tuple[str, ...] | None = None
 
 
 class AnalysisIssue(_BaseResultEntry):

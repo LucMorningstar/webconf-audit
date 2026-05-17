@@ -108,9 +108,13 @@ _EXTERNAL_RULE_METAS = [
     RuleMeta(rule_id="external.cert_san_mismatch", title="Certificate SAN does not match hostname", severity="medium", description="Certificate SAN does not match target hostname.", recommendation="Issue a certificate with correct SAN.", category="external", input_kind="probe", order=709),
 ]
 
-for _m in _EXTERNAL_RULE_METAS:
-    if registry.get_meta(_m.rule_id) is None:
-        registry.register_meta(_m)
+def register_external_rule_metas() -> None:
+    for meta in _EXTERNAL_RULE_METAS:
+        if registry.get_meta(meta.rule_id) is None:
+            registry.register_meta(meta)
+
+
+register_external_rule_metas()
 
 
 def run_external_rules(
@@ -149,4 +153,4 @@ def run_external_rules(
     return findings
 
 
-__all__ = ["run_external_rules"]
+__all__ = ["register_external_rule_metas", "run_external_rules"]
