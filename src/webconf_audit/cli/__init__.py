@@ -183,32 +183,37 @@ def _apply_suppressions(
 
 def _record_group_by_option(
     ctx: click.Context,
-    _param: click.Parameter,
+    param: click.Parameter,
     value: GroupBy,
 ) -> GroupBy:
-    if value == GroupBy.standard:
-        _grouping_sequence(ctx).append("standard")
+    if _option_came_from_cli(ctx, param):
+        _grouping_sequence(ctx).append(value.value)
     return value
 
 
 def _record_group_repeated_option(
     ctx: click.Context,
-    _param: click.Parameter,
+    param: click.Parameter,
     value: bool,
 ) -> bool:
-    if value:
-        _grouping_sequence(ctx).append("repeated")
+    if _option_came_from_cli(ctx, param):
+        _grouping_sequence(ctx).append("repeated" if value else "no-repeated")
     return value
 
 
 def _record_group_by_cause_option(
     ctx: click.Context,
-    _param: click.Parameter,
+    param: click.Parameter,
     value: bool,
 ) -> bool:
-    if value:
-        _grouping_sequence(ctx).append("cause")
+    if _option_came_from_cli(ctx, param):
+        _grouping_sequence(ctx).append("cause" if value else "no-cause")
     return value
+
+
+def _option_came_from_cli(ctx: click.Context, param: click.Parameter) -> bool:
+    source = ctx.get_parameter_source(param.name) if param.name else None
+    return source == click.core.ParameterSource.COMMANDLINE
 
 
 def _grouping_sequence(ctx: click.Context) -> list[str]:
@@ -219,6 +224,9 @@ def _grouping_sequence(ctx: click.Context) -> list[str]:
     return sequence
 
 
+_GROUPING_ACTIVATIONS: frozenset[str] = frozenset({"standard", "repeated", "cause"})
+
+
 def _resolve_grouping_options(
     *,
     group_by: GroupBy,
@@ -226,7 +234,8 @@ def _resolve_grouping_options(
     group_by_cause: bool,
     grouping_sequence: list[str],
 ) -> tuple[GroupBy, bool, bool]:
-    if len(grouping_sequence) > 1:
+    activations = [token for token in grouping_sequence if token in _GROUPING_ACTIVATIONS]
+    if len(activations) > 1:
         typer.echo(
             (
                 "Warning: --group-by standard, --group-repeated, and "

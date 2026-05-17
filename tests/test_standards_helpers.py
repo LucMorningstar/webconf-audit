@@ -197,7 +197,7 @@ def test_nist_csf_2_accepts_optional_note() -> None:
     ],
 )
 def test_nist_csf_2_rejects_invalid_subcategory(subcategory: str) -> None:
-    with pytest.raises(ValueError, match="PR.DS-01 or GV.OC-03"):
+    with pytest.raises(ValueError, match=r"PR\.DS-01 or GV\.OC-03"):
         nist_csf_2(subcategory)
 
 
