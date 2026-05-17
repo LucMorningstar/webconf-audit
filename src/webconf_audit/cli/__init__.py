@@ -101,7 +101,7 @@ def _group_repeated_option() -> bool:
 def _group_by_cause_option() -> bool:
     return typer.Option(
         False,
-        "--group-by-cause",
+        "--group-by-cause/--no-group-by-cause",
         help="Group findings by shared effective cause in text and JSON reports.",
         callback=_record_group_by_cause_option,
     )
