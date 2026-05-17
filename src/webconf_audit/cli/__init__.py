@@ -13,7 +13,7 @@ from webconf_audit.local.lighttpd import analyze_lighttpd_config
 from webconf_audit.local.nginx import analyze_nginx_config
 from webconf_audit.models import AnalysisIssue, AnalysisResult, Severity, SourceLocation
 from webconf_audit.report import JsonFormatter, ReportData, TextFormatter, deduplicate_findings
-from webconf_audit.rule_registry import RuleCategory, RuleMeta
+from webconf_audit.rule_registry import RuleCategory, RuleMeta, StandardReference
 from webconf_audit.suppressions import apply_suppressions, load_suppression_file
 
 app = typer.Typer(help="Web server configuration security audit tool")
@@ -647,37 +647,24 @@ def _rule_meta_payload(meta: RuleMeta) -> dict[str, object]:
         "server_type": meta.server_type,
         "input_kind": meta.input_kind,
         "tags": list(meta.tags),
-        "standards": [
-            {
-                key: value
-                for key, value in {
-                    "standard": ref.standard,
-                    "reference": ref.reference,
-                    "url": ref.url,
-                    "coverage": ref.coverage,
-                    "note": ref.note,
-                }.items()
-                if value is not None
-            }
-            for ref in meta.standards
-        ],
+        "standards": [_rule_standard_ref_payload(ref) for ref in meta.standards],
         "standards_secondary": [
-            {
-                key: value
-                for key, value in {
-                    "standard": ref.standard,
-                    "reference": ref.reference,
-                    "url": ref.url,
-                    "coverage": ref.coverage,
-                    "note": ref.note,
-                }.items()
-                if value is not None
-            }
-            for ref in meta.standards_secondary
+            _rule_standard_ref_payload(ref) for ref in meta.standards_secondary
         ],
         "condition": meta.condition,
         "order": meta.order,
     }
+
+
+def _rule_standard_ref_payload(ref: StandardReference) -> dict[str, object]:
+    fields: dict[str, object | None] = {
+        "standard": ref.standard,
+        "reference": ref.reference,
+        "url": ref.url,
+        "coverage": ref.coverage,
+        "note": ref.note,
+    }
+    return {key: value for key, value in fields.items() if value is not None}
 
 
 def _parse_rule_category(value: str | None) -> RuleCategory | None:
