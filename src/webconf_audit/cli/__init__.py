@@ -366,15 +366,15 @@ def analyze_nginx(
     result = analyze_nginx_config(config_path)
     _output_result(
         result,
-        output_format,
-        fail_on,
-        suppressions,
-        baseline,
-        write_baseline,
-        fail_on_new,
-        group_by,
-        group_repeated,
-        group_by_cause,
+        fmt=output_format,
+        fail_on=fail_on,
+        suppressions_path=suppressions,
+        baseline_path=baseline,
+        write_baseline_path=write_baseline,
+        fail_on_new=fail_on_new,
+        group_by=group_by,
+        group_repeated=group_repeated,
+        group_by_cause=group_by_cause,
     )
 
 
@@ -400,15 +400,15 @@ def analyze_apache(
     result = analyze_apache_config(config_path)
     _output_result(
         result,
-        output_format,
-        fail_on,
-        suppressions,
-        baseline,
-        write_baseline,
-        fail_on_new,
-        group_by,
-        group_repeated,
-        group_by_cause,
+        fmt=output_format,
+        fail_on=fail_on,
+        suppressions_path=suppressions,
+        baseline_path=baseline,
+        write_baseline_path=write_baseline,
+        fail_on_new=fail_on_new,
+        group_by=group_by,
+        group_repeated=group_repeated,
+        group_by_cause=group_by_cause,
     )
 
 
@@ -446,15 +446,15 @@ def analyze_lighttpd(
     )
     _output_result(
         result,
-        output_format,
-        fail_on,
-        suppressions,
-        baseline,
-        write_baseline,
-        fail_on_new,
-        group_by,
-        group_repeated,
-        group_by_cause,
+        fmt=output_format,
+        fail_on=fail_on,
+        suppressions_path=suppressions,
+        baseline_path=baseline,
+        write_baseline_path=write_baseline,
+        fail_on_new=fail_on_new,
+        group_by=group_by,
+        group_repeated=group_repeated,
+        group_by_cause=group_by_cause,
     )
 
 
@@ -488,15 +488,15 @@ def analyze_iis(
     result = analyze_iis_config(config_path, machine_config_path=machine_config)
     _output_result(
         result,
-        output_format,
-        fail_on,
-        suppressions,
-        baseline,
-        write_baseline,
-        fail_on_new,
-        group_by,
-        group_repeated,
-        group_by_cause,
+        fmt=output_format,
+        fail_on=fail_on,
+        suppressions_path=suppressions,
+        baseline_path=baseline,
+        write_baseline_path=write_baseline,
+        fail_on_new=fail_on_new,
+        group_by=group_by,
+        group_repeated=group_repeated,
+        group_by_cause=group_by_cause,
     )
 
 
@@ -565,15 +565,15 @@ def analyze_external(
     result = analyze_external_target(target, scan_ports=scan_ports, ports=parsed_ports)
     _output_result(
         result,
-        output_format,
-        fail_on,
-        suppressions,
-        baseline,
-        write_baseline,
-        fail_on_new,
-        group_by,
-        group_repeated,
-        group_by_cause,
+        fmt=output_format,
+        fail_on=fail_on,
+        suppressions_path=suppressions,
+        baseline_path=baseline,
+        write_baseline_path=write_baseline,
+        fail_on_new=fail_on_new,
+        group_by=group_by,
+        group_repeated=group_repeated,
+        group_by_cause=group_by_cause,
     )
 
 
