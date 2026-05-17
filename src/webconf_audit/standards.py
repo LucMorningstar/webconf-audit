@@ -132,9 +132,11 @@ def asvs_5(
     coverage: StandardCoverage = "direct",
     note: str | None = None,
 ) -> StandardReference:
-    normalized_requirement = requirement.strip()
-    if not normalized_requirement:
-        raise ValueError("asvs_5: requirement must be a non-empty string.")
+    normalized_requirement = _normalize_non_empty_text(
+        requirement,
+        fn_name="asvs_5",
+        field_name="requirement",
+    )
     return StandardReference(
         standard="OWASP ASVS",
         reference=f"v5.0.0-{normalized_requirement}",

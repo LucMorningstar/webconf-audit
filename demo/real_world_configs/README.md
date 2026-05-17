@@ -30,8 +30,10 @@ The authoritative per-sample metadata is in `metadata.json`.
 
 ## Run Pytest Validation
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q tests/test_real_world_config_fixtures.py
+Run from the repository root:
+
+```shell
+python -m pytest -q tests/test_real_world_config_fixtures.py
 ```
 
 The tests assert that each local analyzer returns an `AnalysisResult`, reports
@@ -41,8 +43,10 @@ finding counts because rule packs evolve.
 
 ## Generate Reports
 
-```powershell
-.\scripts\run_real_world_config_samples.ps1
+Run from the repository root:
+
+```shell
+pwsh ./scripts/run_real_world_config_samples.ps1
 ```
 
 The script writes text and JSON reports under

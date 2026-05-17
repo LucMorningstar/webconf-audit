@@ -135,7 +135,7 @@ def _output_result(
     suppression_load_failed = _apply_suppressions(
         result,
         suppressions_path,
-        load_default=fail_on is not None or fail_on_new is not None,
+        load_default=suppressions_path is None,
     )
     report = ReportData(results=[result])
     baseline_operation_failed = _apply_baseline(report, result, baseline_path, fail_on_new)

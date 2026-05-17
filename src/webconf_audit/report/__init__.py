@@ -924,8 +924,9 @@ def _suppressed_payloads_for_report(
     raw_payloads = _suppressed_finding_payloads(report.results)
     if report.baseline_diff is None:
         return raw_payloads
-    diff_payloads = _diff_entries(baseline_diff, "suppressed_findings")
-    return diff_payloads or raw_payloads
+    if "suppressed_findings" not in report.baseline_diff:
+        return raw_payloads
+    return _diff_entries(report.baseline_diff, "suppressed_findings")
 
 
 def deduplicated_finding_pairs(results: list[AnalysisResult]) -> list[tuple[AnalysisResult, Finding]]:

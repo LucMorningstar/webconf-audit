@@ -139,7 +139,7 @@ def test_mitre_attack_marks_reference_as_secondary() -> None:
 
 @pytest.mark.parametrize("technique_id", ["TA0001", "T15", "foo"])
 def test_mitre_attack_rejects_invalid_technique_ids(technique_id: str) -> None:
-    with pytest.raises(ValueError, match="T1190 or T1592.002"):
+    with pytest.raises(ValueError, match=r"T1190 or T1592\.002"):
         mitre_attack(technique_id)
 
 

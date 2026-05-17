@@ -4,7 +4,7 @@ This project includes two complementary local validation datasets:
 
 - `demo/real_world_configs/` contains small public-source-derived examples for
   broad analyzer smoke validation across Nginx, Apache, Lighttpd, and IIS.
-- `tests/fixtures/webserver-configs/` contains security-focused known-bad and
+- `tests/fixtures/rule-corpus/` contains security-focused known-bad and
   known-good fixtures with explicit expected findings for regression tests.
 
 Both datasets are defensive academic validation material for hardening research.
@@ -13,7 +13,7 @@ They are not a target list, and they do not require scanning third-party systems
 ## Security Corpus Layout
 
 ```text
-tests/fixtures/webserver-configs/
+tests/fixtures/rule-corpus/
   nginx/
     vulnerable/
     secure/
@@ -30,8 +30,7 @@ tests/fixtures/webserver-configs/
     inheritance-edge-cases/
   external-targets/
     badssl.json
-  metadata/
-    cases.json
+  manifest.json
 ```
 
 All four supported servers (Nginx, Apache, Lighttpd, IIS) carry both
@@ -39,7 +38,7 @@ All four supported servers (Nginx, Apache, Lighttpd, IIS) carry both
 folders for parser/inheritance regression fixtures that have their
 own targeted test files.
 
-`metadata/cases.json` is the authoritative index. Each case records:
+`manifest.json` is the authoritative index. Each case records:
 
 - `id`
 - `server_type`
@@ -168,7 +167,7 @@ historical context for future auditors.
 ## Run Static Tests
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q tests/test_webserver_config_security_corpus.py
+.\.venv\Scripts\python.exe -m pytest -q tests/test_rule_corpus_metadata.py
 ```
 
 This runs only local static analyzers against committed fixtures. It does not
@@ -210,13 +209,13 @@ are separate from the static security corpus above.
 
 If a future fixture needs external-mode validation, prefer a local container in
 that integration harness over a public target. Keep the static fixture and
-expected local findings in `tests/fixtures/webserver-configs/` so the normal
+expected local findings in `tests/fixtures/rule-corpus/` so the normal
 test suite remains offline.
 
 ## Adding a Fixture
 
 1. Add the config under the matching server/profile directory.
-2. Add a case entry to `tests/fixtures/webserver-configs/metadata/cases.json`.
+2. Add a case entry to `tests/fixtures/rule-corpus/manifest.json`.
 3. Use `synthetic-derived` unless you are copying a small file under a clearly
    compatible license.
 4. Replace real domains, tokens, credentials, certificates, and private paths
