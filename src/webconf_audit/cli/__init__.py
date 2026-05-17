@@ -251,10 +251,16 @@ def _resolve_grouping_options(
     winner = grouping_sequence[-1]
     if winner == "standard":
         return GroupBy.standard, False, False
+    if winner == "severity":
+        return GroupBy.severity, False, False
     if winner == "repeated":
         return GroupBy.severity, True, False
+    if winner == "no-repeated":
+        return group_by, False, group_by_cause
     if winner == "cause":
         return GroupBy.severity, False, True
+    if winner == "no-cause":
+        return group_by, group_repeated, False
     return group_by, group_repeated, group_by_cause
 
 
