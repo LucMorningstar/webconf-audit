@@ -392,7 +392,10 @@ def test_analyze_external_cli_prints_findings_section(monkeypatch) -> None:
 
 
 def test_analyze_iis_cli_prints_result(monkeypatch) -> None:
-    def fake_analyze_iis_config(config_path: str) -> AnalysisResult:
+    def fake_analyze_iis_config(
+        config_path: str,
+        machine_config_path: str | None = None,
+    ) -> AnalysisResult:
         return AnalysisResult(
             mode="local",
             target=config_path,
@@ -662,7 +665,10 @@ def test_analyze_nginx_json_has_summary_and_results(monkeypatch) -> None:
 def test_analyze_iis_json_format(monkeypatch) -> None:
     import json
 
-    def fake_analyze_iis_config(config_path: str) -> AnalysisResult:
+    def fake_analyze_iis_config(
+        config_path: str,
+        machine_config_path: str | None = None,
+    ) -> AnalysisResult:
         return AnalysisResult(
             mode="local",
             target=config_path,

@@ -1,0 +1,3 @@
+RewriteEngine On
+RewriteRule ^old/(.*)$ /new/$1 [R=302,L]
+Header set X-Frame-Options "SAMEORIGIN"

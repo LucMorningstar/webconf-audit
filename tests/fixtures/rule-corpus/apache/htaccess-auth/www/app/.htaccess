@@ -1,0 +1,3 @@
+AuthType Basic
+AuthName "app"
+AuthUserFile /etc/apache2/.htpasswd
