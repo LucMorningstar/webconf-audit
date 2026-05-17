@@ -485,10 +485,7 @@ def analyze_iis(
     group_repeated: bool = _group_repeated_option(),
     group_by_cause: bool = _group_by_cause_option(),
 ) -> None:
-    kwargs: dict[str, object] = {}
-    if machine_config is not None:
-        kwargs["machine_config_path"] = machine_config
-    result = analyze_iis_config(config_path, **kwargs)
+    result = analyze_iis_config(config_path, machine_config_path=machine_config)
     _output_result(
         result,
         output_format,
